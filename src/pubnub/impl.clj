@@ -8,11 +8,11 @@
 ; the terms of this license.
 ;
 ; You must not remove this notice, or any other, from this software.
-
 (ns pubnub.impl
   "Please move on nothing to see here.
 
    These are just implementation details."
+  (:refer-clojure :exclude [time])
   (:require [clojure.core.async :refer [>! <! >!! <!! chan close! go go-loop pub sub sliding-buffer]]
             [clojure.edn :as edn]
             [cheshire.core :as json]
@@ -66,10 +66,8 @@
 ;; maybe multi-method based on first parameter (action)?!?
 ;; maybe protocol dsl (macro) that creates coresponding fns?!?
 (defn- publish-request
-  [{:keys [publish-key subscribe-key channel uuid origin ssl? encoding encrypt-cipher] :as pn-channel} message]
+  [{:keys [publish-key subscribe-key channel origin ssl?] :as pn-channel} message]
   (let [protocol  (if ssl? "https" "http")
-        enc-msg   (if encrypt-cipher (crypto/encrypt pn-channel message) message)
-        msg       (json/generate-string enc-msg)
         signature (create-signature channel)
         callback  "0"]
     (format "%s://%s/publish/%s/%s/%s/%s/%s/%s"
@@ -80,7 +78,7 @@
             signature
             channel
             callback
-            msg)))
+            message)))
 
 (defn- subscribe-request
   [{:keys [subscribe-key channel client-id origin ssl?]} timetoken]
@@ -160,10 +158,12 @@
   (contains? @subscriptions pn-channel))
 
 (defn publish
-  [pn-channel message]
+  [{:keys [encrypt-cipher] :as pn-channel} message]
   (try
-    (pubnub-get (publish-request pn-channel message))
-    {:status :ok :message "Sent"}
+    (let [enc-msg (if encrypt-cipher (crypto/encrypt pn-channel (json/generate-string message)) message)
+          msg     (json/generate-string enc-msg)]
+      (pubnub-get (publish-request pn-channel msg))
+      {:status :ok :message "Sent"})
     (catch IOException ioe
       (error-message ioe))
     (catch ExceptionInfo ei
@@ -175,7 +175,7 @@
 
 (defn- subscribe*
   "Subscribe to PubNub channel."
-  [pn-channel]
+  [{:keys [encrypt-cipher] :as pn-channel}]
   (let [c (chan)]
     (swap! subscriptions conj pn-channel)
     (go-loop [timetoken 0]
@@ -184,7 +184,11 @@
                      [msgs new-timetoken] (json/parse-string body true)]
                  (if (subscribed? pn-channel)
                    (do
-                     (when (seq msgs) (>! c {:status :ok :payload msgs}))
+                     (when (seq msgs)
+                       (>! c {:status :ok :payload (mapv #(json/parse-string
+                                                           (if encrypt-cipher
+                                                             (crypto/decrypt pn-channel %)
+                                                             %) true) msgs)}))
                      (recur new-timetoken))
                    (do
                      (leave pn-channel)
@@ -210,7 +214,7 @@
    - :ok
    - :error
 
-   and hooks up the callback-fn to the :ok topic
+   The callback-fn is hooked up to the :ok topic
    and the error-fn to the :error topic (via two channels).
 
    In order for the channels not to block, the publication
@@ -310,17 +314,14 @@
 ;;; Utilities
 
 (defn time
-  "This has not functional value other than a PING to the PubNub Cloud."
-  [pn-channel]
-  (let [{:keys [body]} (pubnub-get (time-request pn-channel))]
-    (json/parse-string body true)))
+  "Returns the PubNub (Long) time value or an exception message.
 
-(defn time
-  "This has not functional value other than a PING to the PubNub Cloud."
+   This has not functional value other than a PING to the PubNub Cloud."
   [pn-channel]
   (try
-    (pubnub-get (time-request pn-channel))
-    {:status :ok :message "Sent"}
+    (let [res            (pubnub-get (time-request pn-channel))
+          {:keys [body]} res]
+      (first (json/parse-string body true)))
     (catch IOException ioe
       (error-message ioe))
     (catch ExceptionInfo ei

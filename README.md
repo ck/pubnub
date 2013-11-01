@@ -5,13 +5,13 @@
 ## Installation ##
 
 Pubnub is available in Clojars. Add this `:dependency` to your Leiningen
-`project.clj`:
+`project.clj`
 
 ```clojure
 [pubnub "0.1.0"]
 ```
 
-Or, add this to your Maven project's `pom.xml`:
+Or, add this to your Maven project's `pom.xml`
 
 ```xml
 <repository>

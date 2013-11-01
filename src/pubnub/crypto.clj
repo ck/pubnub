@@ -8,7 +8,6 @@
 ; the terms of this license.
 ;
 ; You must not remove this notice, or any other, from this software.
-
 (ns pubnub.crypto
   "Cryptographic functions to help keeping things secure.
 
@@ -79,7 +78,7 @@
   ;; used cipher
   (def cipher (make-ciphers {:cipher-key "my secret cipher key"}))
 
-  (pprint (encrypt cipher "hello"))
+  (println (encrypt cipher "hello"))
   ;;=> "7djE+qHCsyk0zm95C2v1gg==" is expected result!!!!
 
   (decrypt cipher "7djE+qHCsyk0zm95C2v1gg==")

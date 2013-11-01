@@ -11,6 +11,7 @@
 
 (ns pubnub
   "API for Pubnub."
+  (:refer-clojure :exclude [time])
   (:require [pubnub.crypto :as crypto]
             [pubnub.impl :as impl]))
 
@@ -61,7 +62,7 @@
   "Publish a message to the PubNub channel.
 
    Returns {:status :ok, :message \"Sent\"} if message was send successfully.
-   Otherwise it returns {:status :error, :message <error message>]
+   Otherwise it returns {:status :error, :message <error message>}
   "
   [pn-channel message]
   (impl/publish pn-channel message))
@@ -131,7 +132,14 @@
 ;;; Utilities
 
 (defn time
-  "This has not functional value other than a ping to the PubNub Cloud."
+  "Returns the PubNub (Long) time value or an exception message.
+
+   Examples:
+
+     (time my-channel)
+     ;;=> 13833327151957688
+
+   This has not functional value other than a PING to the PubNub Cloud."
   [pn-channel]
   (impl/time pn-channel))
 
