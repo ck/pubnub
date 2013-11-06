@@ -79,9 +79,9 @@
   (def cipher (make-ciphers {:cipher-key "my secret cipher key"}))
 
   (println (encrypt cipher "hello"))
-  ;;=> "7djE+qHCsyk0zm95C2v1gg==" is expected result!!!!
+  ;;=> "C+yiyUlT6MSFb9CxLU48pA==" is expected result!!!!
 
-  (decrypt cipher "7djE+qHCsyk0zm95C2v1gg==")
+  (decrypt cipher "C+yiyUlT6MSFb9CxLU48pA==")
   ;;=> "hello"
 
 )

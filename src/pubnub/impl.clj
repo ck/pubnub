@@ -255,7 +255,7 @@
     (swap! presences conj pn-channel)
     (go-loop [timetoken 0]
              (let [{:keys [body]}         (pubnub-get (presence-request pn-channel timetoken))
-                   ;; TODO:Events results are
+                   ;; TODO: Events results are
                    ;; [{action join, timestamp 1381776169, uuid f8edab21-18c7-49c4-8436-62ea1af67673, occupancy 1}]
                    ;; [{action leave, timestamp 1381776169, uuid f8edab21-18c7-49c4-8436-62ea1af67673, occupancy 0}]
                    ;; [{action timeout, timestamp 1381776535, uuid f8edab21-18c7-49c4-8436-62ea1af67673, occupancy 1}]
@@ -274,8 +274,8 @@
 
    This creates a (clojure.core.async) publication with two topics
 
-   - ::success
-   - ::error
+   - :ok
+   - :error
 
    and hooks up the callback-fn to the ::success topic
    and the error-fn to the ::error topic (via two channels).
@@ -292,8 +292,8 @@
           publication (pub msgs-ch topic-fn buffer-fn)
           callback-ch (chan)
           error-ch    (chan)
-          _           (sub publication ::success callback-ch false)
-          _           (sub publication ::error error-ch false)]
+          _           (sub publication :ok callback-ch false)
+          _           (sub publication :error error-ch false)]
       (go (while (presence? pn-channel) (callback-fn (<! callback-ch))))
       (go (while (presence? pn-channel) (error-fn (<! error-ch))))
       nil)))

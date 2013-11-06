@@ -14,16 +14,16 @@
 
 ;;; --- fixtures ------------------------------------
 
-(def cipher (make-ciphers {:cipher-key "my secret cipher key"}))
+(def cipher (make-ciphers {:cipher-key "secret test cipher key"}))
 
 ;;; --- encrypt & decrypt  --------------------------
 
 ;; single word
-(expect "C+yiyUlT6MSFb9CxLU48pA=="
+(expect "soBqymNEHUotV2YDpSmTtQ=="
   (encrypt cipher "hello"))
 
 (expect "hello"
-  (decrypt cipher "C+yiyUlT6MSFb9CxLU48pA=="))
+  (decrypt cipher "soBqymNEHUotV2YDpSmTtQ=="))
 
 ;; preserve leading and trailing spaces
 (expect " hello there "
@@ -45,16 +45,15 @@
 
 ;; same message for different cipher-keys result in different outcomes
 
-(expect-let [other-cipher (make-ciphers {:cipher-key "another secret cipher key"})]
+(expect-let [other-cipher (make-ciphers {:cipher-key "another secret test cipher key"})]
   false? (= (encrypt cipher "hello")
             (encrypt other-cipher "hello")))
 
 ;; same message for same cipher-keys with different
 ;; inititialization-vectors result in different outcomes
-;; TODO fix test, which fails via `lein expectations`
-(expect-let [ch1 (make-ciphers {:cipher-key "my secret cipher key"
-                                :initialization-vector "init-vector-1"})
-             ch2 (make-ciphers {:cipher-key "my secret cipher key"
-                                :initialization-vector "init-vector-2"})]
-  false? (= (encrypt ch1 "hello")
-            (encrypt ch2 "hello")))
+(expect-let [c1 (make-ciphers {:cipher-key "my secret cipher key"
+                               :initialization-vector "0123456789012345"})
+             c2 (make-ciphers {:cipher-key "my secret cipher key"
+                               :initialization-vector "9999999999999999"})]
+  false? (= (encrypt c1 "hello")
+            (encrypt c2 "hello")))

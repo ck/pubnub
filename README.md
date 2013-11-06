@@ -1,6 +1,6 @@
 # PubNub #
 
-[PubNub][pubnub] Client for Clojure
+A Clojure [PubNub][pubnub] Client
 
 ## Installation ##
 
@@ -31,8 +31,7 @@ Pubnub is compatible with Clojure 1.5.1+.
 
 ## Usage ##
 
-To get started, we first need to register a
-[free PubNub account][pubnub-account].
+To get started, first need register a free [PubNub account][pubnub-account].
 
 This will provide us with a PubNub Sandbox we can play in:
 
@@ -61,6 +60,38 @@ to define a PubNub channel
 ```clojure
 (def test-channel (channel test-channel-conf))
 ```
+
+With the channel at hand, we can now publish message to that channel:
+
+```clojure
+(publish test-channel "Hello World!")
+(publish test-channel {:number 419 :ts (java.util.Date.)})
+```
+
+To receive any message published to the channel, we need
+to subscribe to it. The subscription takes a handler function
+that deals with incoming messages and a handler function in case
+any error occur:
+
+```clojure
+(subscribed? test-channel)
+(subscribe test-channel
+           :callback (fn [msgs] (doseq [msg msgs] (println "MSG:" msg)))
+		   :error    (fn [e] (println "ERROR:" e)))
+(subscribed? test-channel)
+```
+
+When we do not want to receive any additonal messages,
+simply unsubscribe:
+
+```clojure
+(pn/unsubscribe test-channel)
+(pn/subscribed? test-channel)
+```
+
+It is important to note that *only* messages posted to the channel
+*after* the client subscribed to it are received. I.e. the client
+will not receive any historic messages.
 
 
 ## Best Practices ##
@@ -93,9 +124,7 @@ created, even with eveything else being the same.
     * "Message Too Big" - Max message size exceeded.
     * "Invalid Publish Key" - Wrong Publish Key was Used.
     * "Invalid Message Signature" - The message was SHA256 Signed incorrectly.
-* Add error handling to subscribe (fn)
 * Support connect/disconnect/reconnect events
-* Support cipher
 * Add timeouts to subscribe/presence
 * Write documentation
 * Support proxy server (server, port)

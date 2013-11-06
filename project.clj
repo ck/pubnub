@@ -1,12 +1,11 @@
 (defproject pubnub "0.1.0-SNAPSHOT"
-  :description "PubNub Client for Clojure"
+  :description "Clojure PubNub Client"
 
   :url "http://github.com/ck/pubnub"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
   :dependencies [[org.clojure/clojure "1.5.1"]
-                 [org.clojure/data.codec "0.1.0"]
                  [org.clojure/core.async "0.1.242.0-44b1e3-alpha"]
                  [cheshire "5.2.0"]
                  [clj-http-lite "0.2.0"]
@@ -19,7 +18,7 @@
   :profiles {:dev          {:source       [["dev"]]
                             :dependencies [[expectations "1.4.56"]]}
              :1.5          {:dependencies [[org.clojure/clojure "1.5.1"]]}
-             :1.6          {:dependencies [[org.clojure/clojure "1.6.0-master-SNAPSHOT"]]}
+             :1.6          {:dependencies [[org.clojure/clojure "1.6.0-alpha1"]]}
              :sanity-check {:aot                :all
                             :warn-on-reflection true
                             :compile-path       "target/sanity-check-aot"}}

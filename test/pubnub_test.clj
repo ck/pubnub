@@ -16,15 +16,16 @@
 
 ;;; --- fixtures ------------------------------------
 
-(def test-channel-conf
-  {:channel       "test-channel"
-   :client-id     "test-pubnub-client"
-   :origin        "test.pubnub.com"
-   :subscribe-key "sub-c-12345678-1111-2222-3333-123456789012"
-   :publish-key   "pub-c-87654321-1111-2222-3333-210987654321"
-   :secret-key    "sec-c-1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789012"})
+(defn load-test-config
+  "Loads test configuration.
 
-(def test-channel (channel test-channel-conf))
+   The file defines the following channel configurations:
+
+   - `insecure-test-channel-conf`
+   - `secure-test-channel-conf`"
+  {:expectations-options :before-run}
+  []
+  (load "config"))
 
 ;;; --- channel ------------------------------------
 
@@ -42,21 +43,51 @@
 
 ;;; --- publish ------------------------------------
 
-;; successful send
-(expect {:status :ok, :message "Sent"}
-  (with-redefs [http/get (constantly {:headers {} :status 200 :body "[1,\"Sent\",\"13817572494159376\"]"})]
-    (publish test-channel "Hello")))
+;; successful send String
+(expect-let [channel (channel insecure-test-channel-conf)]
+  {:status :ok, :message "Sent"}
+  (publish channel "Test message 1"))
 
-;; failed send returns err
-(expect Exception
-  (with-redefs [http/get (constantly (throw (Exception. "an error happened")))]
-    (publish test-channel "Hello")))
+;; successful send map
+(expect-let [channel (channel insecure-test-channel-conf)]
+  {:status :ok, :message "Sent"}
+  (publish channel {:foo "bar" :baz 42}))
+
+;; successful send vector
+(expect-let [channel (channel insecure-test-channel-conf)]
+  {:status :ok, :message "Sent"}
+  (publish channel [:foo "bar" :baz 42]))
+
+;; failed send returns error
+(expect-let [invalid-conf (assoc insecure-test-channel-conf :publish-key "pub-c-87654321-1111-2222-3333-210987654321")
+             channel      (channel invalid-conf)]
+  {:status :error, :message "Invalid Key"}
+  (publish channel "Test message 2"))
 
 ;;; --- subscribed? ------------------------------------
 
+;; is unsubscribed by default
+(expect-let [channel (channel insecure-test-channel-conf)]
+  false?
+  (subscribed? channel))
+
 ;;; --- subscribe ------------------------------------
 
+(expect-let [channel    (channel insecure-test-channel-conf)
+             _          (subscribe channel)
+             subscribed (subscribed? channel)
+             _          (unsubscribe channel)]
+  true?
+  subscribed)
+
 ;;; --- unsubscribe ------------------------------------
+
+(expect-let [channel    (channel insecure-test-channel-conf)
+             _          (subscribe channel)
+             _          (unsubscribe channel)
+             subscribed (subscribed? channel)]
+  false?
+  subscribed)
 
 ;;; --- presence-unsubscribe ------------------------------------
 
@@ -64,12 +95,14 @@
 
 ;;; --- time ------------------------------------
 
-;; successful call returns time
-(expect 13817572494159376
-  (with-redefs [http/get (constantly {:headers {} :status 200 :body "[13817572494159376]"})]
-    (time test-channel)))
+;; successful call returns Long time value
+(expect-let [channel (channel insecure-test-channel-conf)]
+  Long
+  (time channel))
 
-;; failed call returns error
+(expect-let [channel (channel insecure-test-channel-conf)]
+  true?
+  (> (time channel) 13000000000000000))
 
 ;;; --- uuid ------------------------------------
 
