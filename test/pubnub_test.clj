@@ -16,16 +16,14 @@
 
 ;;; --- fixtures ------------------------------------
 
+(declare test-channel-conf)
+
 (defn load-test-config
-  "Loads test configuration.
-
-   The file defines the following channel configurations:
-
-   - `insecure-test-channel-conf`
-   - `secure-test-channel-conf`"
+  "Loads test configuration."
   {:expectations-options :before-run}
   []
-  (load "config"))
+  (alter-var-root #'test-channel-conf
+                  (constantly (read-string (slurp "./test/config.clj")))))
 
 ;;; --- channel ------------------------------------
 
@@ -44,22 +42,22 @@
 ;;; --- publish ------------------------------------
 
 ;; successful send String
-(expect-let [channel (channel insecure-test-channel-conf)]
+(expect-let [channel (channel test-channel-conf)]
   {:status :ok, :message "Sent"}
   (publish channel "Test message 1"))
 
 ;; successful send map
-(expect-let [channel (channel insecure-test-channel-conf)]
+(expect-let [channel (channel test-channel-conf)]
   {:status :ok, :message "Sent"}
   (publish channel {:foo "bar" :baz 42}))
 
 ;; successful send vector
-(expect-let [channel (channel insecure-test-channel-conf)]
+(expect-let [channel (channel test-channel-conf)]
   {:status :ok, :message "Sent"}
   (publish channel [:foo "bar" :baz 42]))
 
 ;; failed send returns error
-(expect-let [invalid-conf (assoc insecure-test-channel-conf :publish-key "pub-c-87654321-1111-2222-3333-210987654321")
+(expect-let [invalid-conf (assoc test-channel-conf :publish-key "pub-c-87654321-1111-2222-3333-210987654321")
              channel      (channel invalid-conf)]
   {:status :error, :message "Invalid Key"}
   (publish channel "Test message 2"))
@@ -67,13 +65,13 @@
 ;;; --- subscribed? ------------------------------------
 
 ;; is unsubscribed by default
-(expect-let [channel (channel insecure-test-channel-conf)]
+(expect-let [channel (channel test-channel-conf)]
   false?
   (subscribed? channel))
 
 ;;; --- subscribe ------------------------------------
 
-(expect-let [channel    (channel insecure-test-channel-conf)
+(expect-let [channel    (channel test-channel-conf)
              _          (subscribe channel)
              subscribed (subscribed? channel)
              _          (unsubscribe channel)]
@@ -82,7 +80,7 @@
 
 ;;; --- unsubscribe ------------------------------------
 
-(expect-let [channel    (channel insecure-test-channel-conf)
+(expect-let [channel    (channel test-channel-conf)
              _          (subscribe channel)
              _          (unsubscribe channel)
              subscribed (subscribed? channel)]
@@ -96,11 +94,11 @@
 ;;; --- time ------------------------------------
 
 ;; successful call returns Long time value
-(expect-let [channel (channel insecure-test-channel-conf)]
+(expect-let [channel (channel test-channel-conf)]
   Long
   (time channel))
 
-(expect-let [channel (channel insecure-test-channel-conf)]
+(expect-let [channel (channel test-channel-conf)]
   true?
   (> (time channel) 13000000000000000))
 

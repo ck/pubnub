@@ -119,6 +119,7 @@ created, even with eveything else being the same.
 
 ## ToDo ##
 
+* Hookup presence
 * Support EDN as data format
 * Handle PubNub errors for publish
     * "Message Too Big" - Max message size exceeded.

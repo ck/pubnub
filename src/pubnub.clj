@@ -8,12 +8,13 @@
 ; the terms of this license.
 ;
 ; You must not remove this notice, or any other, from this software.
-
 (ns pubnub
   "API for Pubnub."
   (:refer-clojure :exclude [time])
   (:require [pubnub.crypto :as crypto]
-            [pubnub.impl :as impl]))
+            [pubnub.pubsub :as pubsub]
+            [pubnub.presence :as presence]
+            [pubnub.util :as util]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Constructors
@@ -49,7 +50,7 @@
   [conf]
   (merge {:origin    "pubsub.pubnub.com"
           :ssl?      true
-          :client-id (impl/uuid)
+          :client-id (util/uuid)
           :encoding  :json}
          conf
          (crypto/make-ciphers conf)))
@@ -65,12 +66,12 @@
    Otherwise it returns {:status :error, :message <error message>}
   "
   [pn-channel message]
-  (impl/publish pn-channel message))
+  (pubsub/publish pn-channel message))
 
 (defn subscribed?
   "Returns true if (PubNub) channel is currently subscribed."
   [pn-channel]
-  (impl/subscribed? pn-channel))
+  (pubsub/subscribed? pn-channel))
 
 (defn subscribe
   "Subscribe to the PubNub channel."
@@ -78,13 +79,13 @@
    & {:keys [callback error]
       :or   {callback (constantly nil)
              error    (constantly nil)}}]
-  (impl/subscribe pn-channel callback error))
+  (pubsub/subscribe pn-channel callback error))
 
 (defn unsubscribe
   "Unsubscribe from the PubNub channel.
    Closes (core.sync) channel at the end."
   [pn-channel]
-  (impl/unsubscribe pn-channel))
+  (pubsub/unsubscribe pn-channel))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Presence
@@ -95,12 +96,12 @@
    & {:keys [callback error]
       :or   {callback (constantly nil)
              error    (constantly nil)}}]
-  (impl/presence pn-channel callback error))
+  (presence/presence pn-channel callback error))
 
 (defn presence-unsubscribe
   "Unsubscribe to presence events for the PubNub channel."
   [pn-channel]
-  (impl/presence-unsubscribe pn-channel))
+  (presence/presence-unsubscribe pn-channel))
 
 (defn here-now
   "Returns the current occupancy status of the channel.
@@ -126,7 +127,7 @@
 
   "
   [pn-channel]
-  (impl/here-now pn-channel))
+  (presence/here-now pn-channel))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Utilities
@@ -141,9 +142,9 @@
 
    This has not functional value other than a PING to the PubNub Cloud."
   [pn-channel]
-  (impl/time pn-channel))
+  (util/time pn-channel))
 
 (defn uuid
   "Returns random, unique UUID string."
   []
-  (impl/uuid))
+  (util/uuid))
