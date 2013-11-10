@@ -1,4 +1,4 @@
-(defproject pubnub "0.1.0-SNAPSHOT"
+(defproject pubnub "0.1.0"
   :description "Clojure PubNub Client"
 
   :url "http://github.com/ck/pubnub"
@@ -12,8 +12,8 @@
                  [digest "1.4.3"]
                  [org.bouncycastle/bcprov-jdk16 "1.46"]]
 
-  :deploy-repositories {"releases"  {:url "https://clojars.org/repo/" :creds :gpg}
-                        "snapshots" {:url "https://clojars.org/repo/" :creds :gpg}}
+  :deploy-repositories {"releases"  {:url "https://clojars.org/repo/"}
+                        "snapshots" {:url "https://clojars.org/repo/"}}
 
   :profiles {:dev          {:source       [["dev"]]
                             :dependencies [[expectations "1.4.56"]]}
