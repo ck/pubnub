@@ -31,8 +31,7 @@ Pubnub is compatible with Clojure 1.5.1+.
 
 ## Usage ##
 
-To get started, first need register a free [PubNub account][pubnub-account].
-
+To get started, first we need to register a free [PubNub account][pubnub-account].
 This will provide us with a PubNub Sandbox we can play in:
 
 
@@ -43,7 +42,7 @@ This will provide us with a PubNub Sandbox we can play in:
 | Secret Key	| sec-c-1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789012 |
 
 
-Use the values in the configuration
+With the keys we can define a configuration
 
 ```clojure
 (def test-channel-conf
@@ -55,13 +54,13 @@ Use the values in the configuration
    :secret-key    "sec-c-1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789012"})
 ```
 
-to define a PubNub channel
+to create a PubNub channel
 
 ```clojure
 (def test-channel (channel test-channel-conf))
 ```
 
-With the channel at hand, we can now publish message to that channel:
+With the channel at hand, we can now publish messages to that channel:
 
 ```clojure
 (publish test-channel "Hello World!")
