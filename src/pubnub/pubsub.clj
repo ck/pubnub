@@ -1,13 +1,13 @@
-; Copyright 2013 Christian Kebekus
-;
-; The use and distribution terms for this software are covered by the
-; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0)
-; which can be found in the file epl-v10.html at the root of this distribution.
-;
-; By using this software in any fashion, you are agreeing to be bound by
-; the terms of this license.
-;
-; You must not remove this notice, or any other, from this software.
+                                        ; Copyright 2013 Christian Kebekus
+                                        ;
+                                        ; The use and distribution terms for this software are covered by the
+                                        ; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0)
+                                        ; which can be found in the file epl-v10.html at the root of this distribution.
+                                        ;
+                                        ; By using this software in any fashion, you are agreeing to be bound by
+                                        ; the terms of this license.
+                                        ;
+                                        ; You must not remove this notice, or any other, from this software.
 (ns pubnub.pubsub
   "Please move on, nothing to see here.
 
@@ -115,32 +115,31 @@
   [{:keys [encrypt-cipher] :as pn-channel}]
   (let [c (chan)]
     (swap! subscriptions conj pn-channel)
-    (go-loop [timetoken 0]
-             (try
-               (let [{:keys [body]}       (common/pubnub-get (subscribe-request pn-channel timetoken))
-                     [msgs new-timetoken] (json/parse-string body true)]
-                 (if (subscribed? pn-channel)
-                   (do
-                     (when (seq msgs)
-                       (>! c {:status :ok :payload (mapv #(json/parse-string
-                                                           (if encrypt-cipher
-                                                             (crypto/decrypt pn-channel %)
-                                                             %) true) msgs)}))
-                     (recur new-timetoken))
-                   (do
-                     (leave pn-channel)
-                     (close! c))))
-               (catch IOException ioe
-                 (>! c (common/error-message ioe)))
-               (catch ExceptionInfo ei
-                 (let [body (get-in (.getData ei) [:object :body])
-                       m    (json/parse-string body true)]
-                   (>! c (common/error-message m))))
-               (catch Exception e
-                 (>! c {:status :error :message "ERROR!"}))
-               (finally
-                 (swap! subscriptions disj pn-channel)
-                 (close! c))))
+    (try (go-loop [timetoken 0]
+           (let [{:keys [body]}       (common/pubnub-get (`subscribe-request pn-channel timetoken))
+                 [msgs new-timetoken] (json/parse-string body true)]
+             (if (subscribed? pn-channel)
+               (do
+                 (when (seq msgs)
+                   (>! c {:status :ok :payload (mapv #(json/parse-string
+                                                       (if encrypt-cipher
+                                                         (crypto/decrypt pn-channel %)
+                                                         %) true) msgs)}))
+                 (recur new-timetoken))
+               (do
+                 (leave pn-channel)
+                 (close! c)))))
+         (catch IOException ioe
+           (>! c (common/error-message ioe)))
+         (catch ExceptionInfo ei
+           (let [body (get-in (.getData ei) [:object :body])
+                 m    (json/parse-string body true)]
+             (>! c (common/error-message m))))
+         (catch Exception e
+           (>! c {:status :error :message "ERROR!"}))
+         (finally
+           (swap! subscriptions disj pn-channel)
+           (close! c)))
     c))
 
 (defn subscribe

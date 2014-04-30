@@ -1,4 +1,4 @@
-(defproject pubnub "0.1.4"
+(defproject pubnub "0.1.5"
   :description "Clojure PubNub Client"
 
   :url "http://github.com/ck/pubnub"
