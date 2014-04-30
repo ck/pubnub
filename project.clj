@@ -1,12 +1,12 @@
-(defproject pubnub "0.1.3"
+(defproject pubnub "0.1.4"
   :description "Clojure PubNub Client"
 
   :url "http://github.com/ck/pubnub"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
-  :dependencies [[org.clojure/clojure "1.5.1"]
-                 [org.clojure/core.async "0.1.295.0-9ea6ef-alpha"]
+  :dependencies [[org.clojure/clojure "1.6.0"]
+                 [org.clojure/core.async "0.1.301.0-deb34a-alpha"]
                  [cheshire "5.3.1"]
                  [clj-http-lite "0.2.0"]
                  [digest "1.4.4"]
