@@ -10,105 +10,109 @@
 ; You must not remove this notice, or any other, from this software.
 (ns pubnub-test
   (:refer-clojure :exclude [time])
-  (:require [expectations :refer :all]
+  (:require [clojure.test :refer :all]
             [clj-http.lite.client :as http]
             [pubnub :refer :all]))
 
-;;; --- fixtures ------------------------------------
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Fixtures
 
 (declare test-channel-conf)
 
-(defn load-test-config
-  "Loads test configuration."
-  {:expectations-options :before-run}
-  []
+(defn load-test-config-fixture [f]
   (alter-var-root #'test-channel-conf
-                  (constantly (read-string (slurp "./test/config.clj")))))
+                  (constantly (read-string (slurp "./test/config.clj"))))
+  (f))
 
-;;; --- channel ------------------------------------
+(use-fixtures :once load-test-config-fixture)
 
-;; default origin to pubsub.pubnub.com
-(expect {:origin "pubsub.pubnub.com"}
-  (in (channel {})))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Tests
 
-;; enable ssl by default
-(expect {:ssl? true}
-  (in (channel {})))
+(deftest test-channel
 
-;; create random client-id if none given
-(expect #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-  (:client-id (channel {})))
+  (is (= "pubsub.pubnub.com"
+         (:origin (channel {})))
+      "default origin to pubsub.pubnub.com")
 
-;;; --- publish ------------------------------------
+  (is (true? (:ssl? (channel {})))
+      "enable ssl by default")
 
-;; successful send String
-(expect-let [channel (channel test-channel-conf)]
-  {:status :ok, :message "Sent"}
-  (publish channel "Test message 1"))
+  (is (re-matches #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                  (:client-id (channel {})))
+      "create random client-id if none given"))
 
-;; successful send map
-(expect-let [channel (channel test-channel-conf)]
-  {:status :ok, :message "Sent"}
-  (publish channel {:foo "bar" :baz 42}))
+(deftest test-publish
 
-;; successful send vector
-(expect-let [channel (channel test-channel-conf)]
-  {:status :ok, :message "Sent"}
-  (publish channel [:foo "bar" :baz 42]))
+  (let [channel (channel test-channel-conf)]
+    (is (= {:status :ok, :message "Sent"}
+           (publish channel "Test message 1"))
+        "successful send String"))
 
-;; failed send returns error
-(expect-let [invalid-conf (assoc test-channel-conf :publish-key "pub-c-87654321-1111-2222-3333-210987654321")
-             channel      (channel invalid-conf)]
-  {:status :error, :message "Invalid Key"}
-  (publish channel "Test message 2"))
+  (let [channel (channel test-channel-conf)]
+    (is (= {:status :ok, :message "Sent"}
+           (publish channel {:foo "bar" :baz 42}))
+        "successful send map"))
 
-;;; --- subscribed? ------------------------------------
+  (let [channel (channel test-channel-conf)]
+    (is (= {:status :ok, :message "Sent"}
+           (publish channel [:foo "bar" :baz 42]))
+        "successful send vector"))
 
-;; is unsubscribed by default
-(expect-let [channel (channel test-channel-conf)]
-  false?
-  (subscribed? channel))
+  (let [invalid-conf (assoc test-channel-conf :publish-key "pub-c-87654321-1111-2222-3333-210987654321")
+        channel      (channel invalid-conf)]
+    (is (= {:status :error, :message "Invalid Key"}
+           (publish channel "Test message 2"))
+        "failed send returns error")))
 
-;;; --- subscribe ------------------------------------
+(deftest test-subscribed?
 
-(expect-let [channel    (channel test-channel-conf)
-             _          (subscribe channel)
-             subscribed (subscribed? channel)
-             _          (unsubscribe channel)]
-  true?
-  subscribed)
+  (let [channel (channel test-channel-conf)]
+    (is (false?
+         (subscribed? channel))
+        "is unsubscribed by default")))
 
-;;; --- unsubscribe ------------------------------------
+(deftest test-subscribe
 
-(expect-let [channel    (channel test-channel-conf)
-             _          (subscribe channel)
-             _          (unsubscribe channel)
-             subscribed (subscribed? channel)]
-  false?
-  subscribed)
+  (let [channel    (channel test-channel-conf)
+        _          (subscribe channel)
+        _          (Thread/sleep 2000)
+        subscribed (subscribed? channel)
+        _          (unsubscribe channel)]
+    (is (true? subscribed))))
 
-;;; --- presence-unsubscribe ------------------------------------
+(deftest test-unsubscribe
 
-;;; --- here-now ------------------------------------
+  (let [channel    (channel test-channel-conf)
+        _          (subscribe channel)
+        _          (unsubscribe channel)
+        subscribed (subscribed? channel)]
+    (is (false? subscribed))) )
 
-;;; --- time ------------------------------------
+(deftest test-presence-unsubscribe
+  )
 
-;; successful call returns Long time value
-(expect-let [channel (channel test-channel-conf)]
-  Long
-  (time channel))
+(deftest test-here-now
+  )
 
-(expect-let [channel (channel test-channel-conf)]
-  true?
-  (> (time channel) 13000000000000000))
+(deftest test-time
 
-;;; --- uuid ------------------------------------
+  (let [channel (channel test-channel-conf)]
+    (is (instance? Long
+                   (time channel))
+        "successful call returns Long time value"))
 
-;; create uuid
-(expect #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-  (uuid))
+  (let [channel (channel test-channel-conf)]
+    (is (true?
+         (> (time channel) 13000000000000000)))))
 
-;; uuids are different
-(expect-let [uuid-1 (uuid)
-             uuid-2 (uuid)]
-  false? (= uuid-1 uuid-2))
+(deftest test-uuid
+
+  (is (re-matches #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                  (uuid))
+      "create uuid")
+
+  (let [uuid-1 (uuid)
+        uuid-2 (uuid)]
+    (is (not= uuid-1 uuid-2)
+        "uuids are different")))

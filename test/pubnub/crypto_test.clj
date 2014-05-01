@@ -9,51 +9,56 @@
 ;
 ; You must not remove this notice, or any other, from this software.
 (ns pubnub.crypto-test
-  (:require [expectations :refer :all]
+  (:require [clojure.test :refer :all]
             [pubnub.crypto :refer :all]))
 
-;;; --- fixtures ------------------------------------
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Fixtures
 
 (def cipher (make-ciphers {:cipher-key "secret test cipher key"}))
 
-;;; --- encrypt & decrypt  --------------------------
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Tests
 
-;; single word
-(expect "soBqymNEHUotV2YDpSmTtQ=="
-  (encrypt cipher "hello"))
+(deftest test-encrypt-and-decrypt
 
-(expect "hello"
-  (decrypt cipher "soBqymNEHUotV2YDpSmTtQ=="))
+  (is (= "soBqymNEHUotV2YDpSmTtQ=="
+         (encrypt cipher "hello"))
+      "encrypt single word")
 
-;; preserve leading and trailing spaces
-(expect " hello there "
-  (->> " hello there "
-       (encrypt cipher)
-       (decrypt cipher)))
+  (is (= "hello"
+         (decrypt cipher "soBqymNEHUotV2YDpSmTtQ=="))
+      "decrypt single word")
 
-;; handle embedded strings
-(expect "\"Hello World!\""
-  (->> "\"Hello World!\""
-       (encrypt cipher)
-       (decrypt cipher)))
+  (is (= " hello there "
+         (->> " hello there "
+              (encrypt cipher)
+              (decrypt cipher)))
+      "preserve leading and trailing spaces")
 
-;; handle embedded data structure characters
-(expect "[ {:foo 1, :bar \"baz\"} 3.1415]"
-  (->> "[ {:foo 1, :bar \"baz\"} 3.1415]"
-       (encrypt cipher)
-       (decrypt cipher)))
+  (is (= "\"Hello World!\""
+         (->> "\"Hello World!\""
+              (encrypt cipher)
+              (decrypt cipher)))
+      "handle embedded strings")
 
-;; same message for different cipher-keys result in different outcomes
+  (is (= "[ {:foo 1, :bar \"baz\"} 3.1415]"
+         (->> "[ {:foo 1, :bar \"baz\"} 3.1415]"
+              (encrypt cipher)
+              (decrypt cipher)))
+      "handle embedded data structure characters")
 
-(expect-let [other-cipher (make-ciphers {:cipher-key "another secret test cipher key"})]
-  false? (= (encrypt cipher "hello")
-            (encrypt other-cipher "hello")))
+  (let [other-cipher (make-ciphers {:cipher-key "another secret test cipher key"})]
+    (is (not= (encrypt cipher "hello")
+              (encrypt other-cipher "hello"))
+        "same message for different cipher-keys result in different outcomes"))
 
-;; same message for same cipher-keys with different
-;; inititialization-vectors result in different outcomes
-(expect-let [c1 (make-ciphers {:cipher-key "my secret cipher key"
-                               :initialization-vector "0123456789012345"})
-             c2 (make-ciphers {:cipher-key "my secret cipher key"
-                               :initialization-vector "9999999999999999"})]
-  false? (= (encrypt c1 "hello")
-            (encrypt c2 "hello")))
+  (let [c1 (make-ciphers {:cipher-key "my secret cipher key"
+                          :initialization-vector "0123456789012345"})
+        c2 (make-ciphers {:cipher-key "my secret cipher key"
+                          :initialization-vector "9999999999999999"})]
+    (is (not= (encrypt c1 "hello")
+              (encrypt c2 "hello"))
+        "same message for same cipher-keys with different inititialization-vectors result in different outcomes"))
+
+  )

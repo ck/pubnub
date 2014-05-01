@@ -15,8 +15,7 @@
   :signing             {:gpg-key "DEDC8F15"}
   :deploy-repositories [["clojars" {:creds :gpg}]]
 
-  :profiles {:dev          {:source       [["dev"]]
-                            :dependencies [[expectations "1.4.56"]]}
+  :profiles {:dev          {:source       [["dev"]]}
              :1.5          {:dependencies [[org.clojure/clojure "1.5.1"]]}
              :1.6          {:dependencies [[org.clojure/clojure "1.6.0"]]}
              :sanity-check {:aot                :all
