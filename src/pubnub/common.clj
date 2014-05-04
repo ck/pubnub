@@ -12,7 +12,8 @@
   "Please move on, nothing to see here.
 
    These are just implementation details."
-  (:require [clj-http.lite.client :as http])
+  (:require [clojure.core.async :as async]
+            [clj-http.lite.client :as http])
   (:import [clojure.lang LazySeq PersistentArrayMap]
            [java.io IOException]))
 
@@ -41,6 +42,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Request
 
-(defn pubnub-get
-  [req]
+(defn pubnub-get [req]
   (http/get req {:headers headers}))

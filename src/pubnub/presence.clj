@@ -83,7 +83,7 @@
 
    This creates a (clojure.core.async) publication with two topics
 
-   - :ok
+   - :success
    - :error
 
    and hooks up the callback-fn to the ::success topic
@@ -93,17 +93,17 @@
    uses a sliding-buffer of 10 elements.
 
    The publication is based on the channel supplied by presence*."
-  [pn-channel callback-fn error-fn]
+  [pn-channel success-fn error-fn]
   (when-not (presence? pn-channel)
     (let [msgs-ch     (presence* pn-channel)
-          topic-fn    (fn [msg] ::success)
+          topic-fn    (fn [msg] :status)
           buffer-fn   (fn [topic] (sliding-buffer 10))
           publication (pub msgs-ch topic-fn buffer-fn)
-          callback-ch (chan)
+          success-ch  (chan)
           error-ch    (chan)
-          _           (sub publication :ok callback-ch false)
+          _           (sub publication :success success-ch false)
           _           (sub publication :error error-ch false)]
-      (go (while (presence? pn-channel) (callback-fn (<! callback-ch))))
+      (go (while (presence? pn-channel) (success-fn (<! success-ch))))
       (go (while (presence? pn-channel) (error-fn (<! error-ch))))
       nil)))
 

@@ -8,7 +8,7 @@ Pubnub is available in Clojars. Add this `:dependency` to your Leiningen
 `project.clj`
 
 ```clojure
-[pubnub "0.1.0"]
+[pubnub "0.1.3"]
 ```
 
 Or, add this to your Maven project's `pom.xml`
@@ -22,7 +22,7 @@ Or, add this to your Maven project's `pom.xml`
 <dependency>
   <groupId>pubnub</groupId>
   <artifactId>pubnub</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.3</version>
 </dependency>
 ```
 
