@@ -13,7 +13,7 @@
 
    These are just implementation details."
   (:refer-clojure :exclude [time])
-  (:require [clojure.core.async :refer [>! <! >!! <!! chan close! go go-loop pub sub sliding-buffer]]
+  (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
             [cheshire.core :as json]
             [digest :as digest]
@@ -100,7 +100,7 @@
     (let [enc-msg (if encrypt-cipher (crypto/encrypt pn-channel (json/generate-string message)) message)
           msg     (json/generate-string enc-msg)]
       (common/pubnub-get (publish-request pn-channel msg))
-      {:status :ok :message "Sent"})
+      {:status :success :message "Sent"})
     (catch IOException ioe
       (common/error-message ioe))
     (catch ExceptionInfo ei
@@ -110,66 +110,54 @@
     (catch Exception e
       e)))
 
-(defn- subscribe*
-  "Subscribe to PubNub channel."
+(declare unsubscribe)
+
+(defn- listen
+  "Listen to PubNub channel."
   [{:keys [encrypt-cipher] :as pn-channel}]
-  (let [c (chan)]
-    (swap! subscriptions conj pn-channel)
-    (go-loop [timetoken 0]
-      (let [{:keys [body]}       (common/pubnub-get (subscribe-request pn-channel timetoken))
-            [msgs new-timetoken] (json/parse-string body true)]
-        (if (subscribed? pn-channel)
-          (do
-            (when (seq msgs)
-              (>! c {:status :ok :payload (mapv #(json/parse-string
-                                                  (if encrypt-cipher
-                                                    (crypto/decrypt pn-channel %)
-                                                    %) true) msgs)}))
-            (recur new-timetoken))
-          (do
-            (leave pn-channel)
-            (close! c)))))
-    ;; (catch IOException ioe
-    ;;   (>! c (common/error-message ioe)))
-    ;; (catch ExceptionInfo ei
-    ;;   (let [body (get-in (.getData ei) [:object :body])
-    ;;         m    (json/parse-string body true)]
-    ;;     (>! c (common/error-message m))))
-    ;; (catch Exception e
-    ;;   (>! c {:status :error :message "ERROR!"}))
-    ;; (finally
-    ;;   (swap! subscriptions disj pn-channel)
-    ;;   (close! c))
+  (let [c (async/chan)]
+    (async/go
+      (try
+        (loop [timetoken 0]
+          (let [res (common/pubnub-get (subscribe-request pn-channel timetoken))]
+            (if (subscribed? pn-channel)
+              (let [[msgs new-timetoken] (json/parse-string (res :body) true)]
+                (when (seq msgs)
+                  (async/>! c {:status  :success
+                               :payload (mapv #(json/parse-string
+                                                (if encrypt-cipher
+                                                  (crypto/decrypt pn-channel %)
+                                                  %) true) msgs)}))
+                (recur new-timetoken))
+              (do
+                (leave pn-channel)
+                (async/close! c)))))
+        (catch IOException ioe
+          (async/>! c (common/error-message ioe)))
+        (catch ExceptionInfo ei
+          (let [body (get-in (.getData ei) [:object :body])
+                m    (json/parse-string body true)]
+            (async/>! c (common/error-message m))))
+        (catch Exception e
+          (async/>! c {:status  :error
+                       :message "ERROR!"}))
+        (finally
+          (unsubscribe pn-channel)
+          (async/close! c))))
     c))
 
 (defn subscribe
-  "Wires up the PubNub subscription to the passed in handler functions.
-
-   This creates a (clojure.core.async) publication with two topics
-
-   - :ok
-   - :error
-
-   The callback-fn is hooked up to the :ok topic
-   and the error-fn to the :error topic (via two channels).
-
-   In order for the channels not to block, the publication
-   uses a sliding-buffer 10 elements.
-
-   The publication is based on the channel supplied by subscribe*."
-  [pn-channel callback-fn error-fn]
+  "Wires up the PubNub subscription to the passed in handler functions."
+  [pn-channel success-fn error-fn]
   (when-not (subscribed? pn-channel)
-    (let [msgs-ch     (subscribe* pn-channel)
-          topic-fn    :status
-          buffer-fn   (fn [topic] (sliding-buffer 10))
-          publication (pub msgs-ch topic-fn buffer-fn)
-          callback-ch (chan)
-          error-ch    (chan)
-          _           (sub publication :ok callback-ch false)
-          _           (sub publication :error error-ch false)]
-      (go (while (subscribed? pn-channel) (callback-fn (:payload (<! callback-ch)))))
-      (go (while (subscribed? pn-channel) (error-fn (<! error-ch))))
-      nil)))
+    (swap! subscriptions conj pn-channel)
+    (async/go
+      (while (subscribed? pn-channel)
+        (when-let [data (async/<! (listen pn-channel))]
+          (case (:status data)
+            :success (success-fn (:payload data))
+            :error   (error-fn data)))))
+    nil))
 
 (defn unsubscribe
   "Unsubscribe from the channel."

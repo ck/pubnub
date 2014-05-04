@@ -48,6 +48,8 @@
 
   For more information see PubNub Best Practices (http://bit.ly/GX6JFG)."
   [conf]
+  {:pre  [(map? conf)
+          (every? #(contains? conf %) [:channel :subscribe-key])]}
   (merge {:origin    "pubsub.pubnub.com"
           :ssl?      true
           :client-id (util/uuid)
@@ -76,10 +78,10 @@
 (defn subscribe
   "Subscribe to the PubNub channel."
   [pn-channel
-   & {:keys [callback error]
-      :or   {callback (constantly nil)
-             error    (constantly nil)}}]
-  (pubsub/subscribe pn-channel callback error))
+   & {:keys [success-fn error-fn]
+      :or   {success-fn (constantly nil)
+             error-fn   (constantly nil)}}]
+  (pubsub/subscribe pn-channel success-fn error-fn))
 
 (defn unsubscribe
   "Unsubscribe from the PubNub channel.
@@ -93,10 +95,10 @@
 (defn presence
   "Subscribe to presence events for the PubNub channel."
   [pn-channel
-   & {:keys [callback error]
-      :or   {callback (constantly nil)
-             error    (constantly nil)}}]
-  (presence/presence pn-channel callback error))
+   & {:keys [success-fn error-fn]
+      :or   {success-fn (constantly nil)
+             error-fn   (constantly nil)}}]
+  (presence/presence pn-channel success-fn error-fn))
 
 (defn presence-unsubscribe
   "Unsubscribe to presence events for the PubNub channel."
