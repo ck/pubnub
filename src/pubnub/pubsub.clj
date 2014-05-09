@@ -1,4 +1,4 @@
-; Copyright 2013 Christian Kebekus
+; Copyright 2013-2014 Christian Kebekus
 ;
 ; The use and distribution terms for this software are covered by the
 ; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0)
@@ -13,19 +13,20 @@
 
    These are just implementation details."
   (:refer-clojure :exclude [time])
-  (:require [clojure.core.async :as async]
+  (:require [slingshot.slingshot :refer (try+)]
+            [clojure.core.async :as async]
             [clojure.edn :as edn]
             [cheshire.core :as json]
             [digest :as digest]
             [pubnub.crypto :as crypto]
             [pubnub.common :as common])
-  (:import [clojure.lang ExceptionInfo]
-           [java.io IOException]))
+  (:import [java.io IOException]
+           [java.net UnknownHostException]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Identites
 
-(def ^{:private true} subscriptions (atom #{}))
+(def ^{:private true} subscriptions (atom {}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Helpers
@@ -86,6 +87,13 @@
         {:keys [body]} res]
     (json/parse-string body true)))
 
+(defn- decode
+  "Decode the data."
+  [{:keys [encrypt-cipher] :as pn-channel} data]
+  (if encrypt-cipher
+    (mapv #(json/parse-string (crypto/decrypt pn-channel %) true) data)
+    data))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; API
 
@@ -96,71 +104,63 @@
 
 (defn publish
   [{:keys [encrypt-cipher] :as pn-channel} message]
-  (try
+  (try+
     (let [enc-msg (if encrypt-cipher (crypto/encrypt pn-channel (json/generate-string message)) message)
           msg     (json/generate-string enc-msg)]
       (common/pubnub-get (publish-request pn-channel msg))
-      {:status :success :message "Sent"})
+      {:status :success, :message "Sent"})
+    (catch UnknownHostException uhe
+      (common/error-message uhe))
     (catch IOException ioe
       (common/error-message ioe))
-    (catch ExceptionInfo ei
-      (let [body (get-in (.getData ei) [:object :body])
-            m    (json/parse-string body true)]
-        (common/error-message m)))
+    (catch (and (map? %) (contains? % :status)) m
+      (common/error-message m))
     (catch Exception e
-      e)))
-
-(declare unsubscribe)
+      (common/error-message e))))
 
 (defn- listen
-  "Listen to PubNub channel."
-  [{:keys [encrypt-cipher] :as pn-channel}]
-  (let [c (async/chan)]
+  "Listen on the PubNub channel."
+  [pn-channel]
+  (let [c (async/chan (async/sliding-buffer (pn-channel :buffer-size)))]
+    (swap! subscriptions assoc pn-channel c)
     (async/go
-      (try
-        (loop [timetoken 0]
-          (let [res (common/pubnub-get (subscribe-request pn-channel timetoken))]
-            (if (subscribed? pn-channel)
-              (let [[msgs new-timetoken] (json/parse-string (res :body) true)]
-                (when (seq msgs)
-                  (async/>! c {:status  :success
-                               :payload (mapv #(json/parse-string
-                                                (if encrypt-cipher
-                                                  (crypto/decrypt pn-channel %)
-                                                  %) true) msgs)}))
-                (recur new-timetoken))
-              (do
-                (leave pn-channel)
-                (async/close! c)))))
-        (catch IOException ioe
-          (async/>! c (common/error-message ioe)))
-        (catch ExceptionInfo ei
-          (let [body (get-in (.getData ei) [:object :body])
-                m    (json/parse-string body true)]
-            (async/>! c (common/error-message m))))
-        (catch Exception e
-          (async/>! c {:status  :error
-                       :message "ERROR!"}))
-        (finally
-          (unsubscribe pn-channel)
-          (async/close! c))))
+      (loop [timetoken 0]
+        (let [result               (try+ {:value (common/pubnub-get (subscribe-request pn-channel timetoken))}
+                                         (catch UnknownHostException uhe               {:exception uhe :retry false})
+                                         (catch IOException ioe                        {:exception ioe :retry true})
+                                         (catch (and (map? %) (contains? % :status)) m {:exception m   :retry false})
+                                         (catch Exception e                            {:exception e   :retry false}))]
+          (when (subscribed? pn-channel)
+            (if-let [e (:exception result)]
+              (if (:retry result)
+                (do
+                  (async/<! (async/timeout 3000))
+                  (recur timetoken))
+                (do
+                  (async/>! c (common/error-message e))
+                  (async/close! c)
+                  (swap! subscriptions dissoc pn-channel)))
+              (let [body                 (get-in result [:value :body])
+                    [data new-timetoken] (json/parse-string body true)
+                    msgs                 (decode pn-channel data)]
+                (doseq [msg msgs]
+                  (async/>! c {:status :success, :payload msg}))
+                (recur new-timetoken)))))))
     c))
 
 (defn subscribe
-  "Wires up the PubNub subscription to the passed in handler functions."
-  [pn-channel success-fn error-fn]
-  (when-not (subscribed? pn-channel)
-    (swap! subscriptions conj pn-channel)
-    (async/go
-      (while (subscribed? pn-channel)
-        (when-let [data (async/<! (listen pn-channel))]
-          (case (:status data)
-            :success (success-fn (:payload data))
-            :error   (error-fn data)))))
-    nil))
+  "Subscribe to the PubNub channel.
+  Returns the core.async channel."
+  [pn-channel]
+  (if (subscribed? pn-channel)
+    (@subscriptions pn-channel)
+    (listen pn-channel)))
 
 (defn unsubscribe
   "Unsubscribe from the channel."
   [pn-channel]
-  (swap! subscriptions disj pn-channel)
-  nil)
+  (let [c (@subscriptions pn-channel)]
+    (leave pn-channel)
+    (async/close! c)
+    (swap! subscriptions dissoc pn-channel)
+    nil))

@@ -1,4 +1,4 @@
-; Copyright 2013 Christian Kebekus
+; Copyright 2013-2014 Christian Kebekus
 ;
 ; The use and distribution terms for this software are covered by the
 ; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0)
@@ -12,10 +12,12 @@
   "Please move on, nothing to see here.
 
    These are just implementation details."
-  (:require [clojure.core.async :as async]
-            [clj-http.lite.client :as http])
-  (:import [clojure.lang LazySeq PersistentArrayMap]
-           [java.io IOException]))
+  (:require [slingshot.slingshot :refer (try+ throw+)]
+            [cheshire.core :as json]
+            [clj-http.client :as http])
+  (:import [clojure.lang ExceptionInfo PersistentArrayMap]
+           [java.io IOException]
+           [java.net UnknownHostException]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Identites
@@ -31,16 +33,32 @@
 (defmulti error-message type)
 
 (defmethod error-message IOException [e]
-  {:status :error :message (.getMessage e)})
+  {:status  :error
+   :message (.getMessage e)})
 
-(defmethod error-message PersistentArrayMap [e]
-  {:status :error :message (:message e)})
+(defmethod error-message UnknownHostException [e]
+  {:status  :error
+   :message (.getMessage e)})
 
-(defmethod error-message LazySeq [e]
-  {:status :error :message (second e)})
+(defmethod error-message ExceptionInfo [e]
+  {:status  :error
+   :message "INFO ERROR!"})
+
+(defmethod error-message Exception [e]
+  {:status  :error
+   :message "ERROR!"})
+
+(defmethod error-message PersistentArrayMap [m]
+  (let [body (m :body)
+        e    (json/parse-string body true)]
+    {:status  :error
+     :message (or (:message e) (second e))}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Request
 
 (defn pubnub-get [req]
-  (http/get req {:headers headers}))
+  (http/get req {:headers        headers
+                 ;; :socket-timeout 1000
+                 ;; :conn-timeout   1000
+                 :retry-handler  (constantly false)}))

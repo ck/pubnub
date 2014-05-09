@@ -1,4 +1,4 @@
-; Copyright 2013 Christian Kebekus
+; Copyright 2013-2014 Christian Kebekus
 ;
 ; The use and distribution terms for this software are covered by the
 ; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0)
@@ -13,6 +13,8 @@
 
    Uses Bouncy Castle Crypto, a lightweight cryptography API."
   (:require [clojure.string :as str]
+            [schema.core :as s]
+            [schema.macros :as sm]
             [digest :as digest])
   (:import [java.io ByteArrayInputStream ByteArrayOutputStream]
            [java.io InputStream OutputStream]
@@ -22,6 +24,13 @@
            [org.bouncycastle.crypto.params KeyParameter ParametersWithIV]
            [org.bouncycastle.util.encoders Base64]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Schemas and Schema Helpers
+
+(def Ciphers
+  (s/maybe {:encrypt-cipher PaddedBufferedBlockCipher
+            :decrypt-cipher PaddedBufferedBlockCipher}))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Identities
 
@@ -30,7 +39,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; API
 
-(defn make-ciphers
+(sm/defn make-ciphers :- Ciphers
   "Initialize the ciphers for encryption."
   [{:keys [cipher-key initialization-vector]
     :or   {initialization-vector default-initialization-vector}}]

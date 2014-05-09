@@ -1,4 +1,4 @@
-; Copyright 2013 Christian Kebekus
+; Copyright 2013-2014 Christian Kebekus
 ;
 ; The use and distribution terms for this software are covered by the
 ; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0)
@@ -11,7 +11,8 @@
 (ns pubnub-test
   (:refer-clojure :exclude [time])
   (:require [clojure.test :refer :all]
-            [clj-http.lite.client :as http]
+            [schema.test :as st]
+            [clj-http.client :as http]
             [pubnub :refer :all]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -24,7 +25,12 @@
                   (constantly (read-string (slurp "./test/config.clj"))))
   (f))
 
-(use-fixtures :once load-test-config-fixture)
+(use-fixtures :once
+  load-test-config-fixture
+  st/validate-schemas)
+
+(def dummy-conf {:channel       "1"
+                 :subscribe-key "sub-c-12345678-1111-2222-3333-123456789012"})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Tests
@@ -32,30 +38,30 @@
 (deftest test-channel
 
   (is (= "pubsub.pubnub.com"
-         (:origin (channel {})))
+         (:origin (channel dummy-conf)))
       "default origin to pubsub.pubnub.com")
 
-  (is (true? (:ssl? (channel {})))
+  (is (true? (:ssl? (channel dummy-conf)))
       "enable ssl by default")
 
   (is (re-matches #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-                  (:client-id (channel {})))
+                  (:client-id (channel dummy-conf)))
       "create random client-id if none given"))
 
 (deftest test-publish
 
   (let [channel (channel test-channel-conf)]
-    (is (= {:status :ok, :message "Sent"}
+    (is (= {:status :success, :message "Sent"}
            (publish channel "Test message 1"))
         "successful send String"))
 
   (let [channel (channel test-channel-conf)]
-    (is (= {:status :ok, :message "Sent"}
+    (is (= {:status :success, :message "Sent"}
            (publish channel {:foo "bar" :baz 42}))
         "successful send map"))
 
   (let [channel (channel test-channel-conf)]
-    (is (= {:status :ok, :message "Sent"}
+    (is (= {:status :success, :message "Sent"}
            (publish channel [:foo "bar" :baz 42]))
         "successful send vector"))
 
@@ -72,22 +78,22 @@
          (subscribed? channel))
         "is unsubscribed by default")))
 
-(deftest test-subscribe
+;; (deftest test-subscribe
 
-  (let [channel    (channel test-channel-conf)
-        _          (subscribe channel)
-        _          (Thread/sleep 2000)
-        subscribed (subscribed? channel)
-        _          (unsubscribe channel)]
-    (is (true? subscribed))))
+;;   (let [channel    (channel test-channel-conf)
+;;         _          (subscribe channel)
+;;         _          (Thread/sleep 2000)
+;;         subscribed (subscribed? channel)
+;;         _          (unsubscribe channel)]
+;;     (is (true? subscribed))))
 
-(deftest test-unsubscribe
+;; (deftest test-unsubscribe
 
-  (let [channel    (channel test-channel-conf)
-        _          (subscribe channel)
-        _          (unsubscribe channel)
-        subscribed (subscribed? channel)]
-    (is (false? subscribed))) )
+;;   (let [channel    (channel test-channel-conf)
+;;         _          (subscribe channel)
+;;         _          (unsubscribe channel)
+;;         subscribed (subscribed? channel)]
+;;     (is (false? subscribed))) )
 
 (deftest test-presence-unsubscribe
   )

@@ -1,4 +1,4 @@
-; Copyright 2013 Christian Kebekus
+; Copyright 2013-2014 Christian Kebekus
 ;
 ; The use and distribution terms for this software are covered by the
 ; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0)
@@ -13,15 +13,18 @@
 
    These are just implementation details."
   (:refer-clojure :exclude [time])
-  (:require [clojure.core.async :refer [>! <! >!! <!! chan close! go go-loop pub sub sliding-buffer]]
+  (:require [slingshot.slingshot :refer (try+)]
+            [clojure.core.async :as async]
             [cheshire.core :as json]
-            [pubnub.common :as common]))
+            [pubnub.common :as common])
+  (:import [java.io IOException]
+           [java.net UnknownHostException]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Identites
 
 (def ^{:const true :private true} presence-channel-suffix "-pnpres")
-(def ^{:private true} presences (atom #{}))
+(def ^{:private true} presences (atom {}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Helpers
@@ -49,6 +52,24 @@
             subscribe-key
             channel)))
 
+(defn- leave-request
+  [{:keys [subscribe-key channel origin client-id ssl?]}]
+  (let [protocol (if ssl? "https" "http")]
+    (format "%s://%s/v2/presence/sub-key/%s/channel/%s%s/leave?uuid=%s"
+            protocol
+            origin
+            subscribe-key
+            channel
+            presence-channel-suffix
+            client-id)))
+
+(defn- leave
+  "Send leave request for presence channel."
+  [pn-channel]
+  (let [res            (common/pubnub-get (leave-request pn-channel))
+        {:keys [body]} res]
+    (json/parse-string body true)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; API
 
@@ -57,61 +78,56 @@
   [pn-channel]
   (contains? @presences pn-channel))
 
-(defn- presence*
-  "Subscribe to PubNub channel."
+(defn- listen
+  "Listen on the PubNub channel."
   [pn-channel]
-  (let [c (chan)]
-    (swap! presences conj pn-channel)
-    (go-loop [timetoken 0]
-             (let [{:keys [body]}         (common/pubnub-get (presence-request pn-channel timetoken))
-                   ;; TODO: Events results are
-                   ;; [{action join, timestamp 1381776169, uuid f8edab21-18c7-49c4-8436-62ea1af67673, occupancy 1}]
-                   ;; [{action leave, timestamp 1381776169, uuid f8edab21-18c7-49c4-8436-62ea1af67673, occupancy 0}]
-                   ;; [{action timeout, timestamp 1381776535, uuid f8edab21-18c7-49c4-8436-62ea1af67673, occupancy 1}]
-                   ;; Should be converted to {:action "join" :client-id "f8edab21-18c7-49c4-8436-62ea1af67673"}
-                   [events new-timetoken] (json/parse-string body true)]
-               (if (presence? pn-channel)
-                 (do
-                   (when (seq events)
-                     (>! c events))
-                   (recur new-timetoken))
-                 (close! c))))
+  (let [c (async/chan (async/sliding-buffer (pn-channel :buffer-size)))]
+    (swap! presences assoc pn-channel c)
+    (async/go
+      (loop [timetoken 0]
+        (let [result               (try+ {:value (common/pubnub-get (presence-request pn-channel timetoken))}
+                                         (catch UnknownHostException uhe               {:exception uhe :retry false})
+                                         (catch IOException ioe                        {:exception ioe :retry true})
+                                         (catch (and (map? %) (contains? % :status)) m {:exception m   :retry false})
+                                         (catch Exception e                            {:exception e   :retry false}))]
+          (when (presence? pn-channel)
+            (if-let [e (:exception result)]
+              (if (:retry result)
+                (do
+                  (async/<! (async/timeout 3000))
+                  (recur timetoken))
+                (do
+                  (async/>! c (common/error-message e))
+                  (async/close! c)
+                  (swap! presences dissoc pn-channel)))
+              (let [body                   (get-in result [:value :body])
+                    [events new-timetoken] (json/parse-string body true)]
+                ;; TODO: Events results are
+                ;; [{action join, timestamp 1381776169, uuid f8edab21-18c7-49c4-8436-62ea1af67673, occupancy 1}]
+                ;; [{action leave, timestamp 1381776169, uuid f8edab21-18c7-49c4-8436-62ea1af67673, occupancy 0}]
+                ;; [{action timeout, timestamp 1381776535, uuid f8edab21-18c7-49c4-8436-62ea1af67673, occupancy 1}]
+                ;; Should be converted to {:action "join" :client-id "f8edab21-18c7-49c4-8436-62ea1af67673"}
+                (doseq [event events]
+                  (async/>! c {:status :success, :event event}))
+                (recur new-timetoken)))))))
     c))
 
-(defn presence
-  "Wires up PubNub presence events to the passed in handler functions.
-
-   This creates a (clojure.core.async) publication with two topics
-
-   - :success
-   - :error
-
-   and hooks up the callback-fn to the ::success topic
-   and the error-fn to the ::error topic (via two channels).
-
-   In order for the channels not to block, the publication
-   uses a sliding-buffer of 10 elements.
-
-   The publication is based on the channel supplied by presence*."
-  [pn-channel success-fn error-fn]
-  (when-not (presence? pn-channel)
-    (let [msgs-ch     (presence* pn-channel)
-          topic-fn    (fn [msg] :status)
-          buffer-fn   (fn [topic] (sliding-buffer 10))
-          publication (pub msgs-ch topic-fn buffer-fn)
-          success-ch  (chan)
-          error-ch    (chan)
-          _           (sub publication :success success-ch false)
-          _           (sub publication :error error-ch false)]
-      (go (while (presence? pn-channel) (success-fn (<! success-ch))))
-      (go (while (presence? pn-channel) (error-fn (<! error-ch))))
-      nil)))
+(defn presence-subscribe
+  "Subscribe to the PubNub channel.
+  Returns the core.async channel."
+  [pn-channel]
+  (if (presence? pn-channel)
+    (@presences pn-channel)
+    (listen pn-channel)))
 
 (defn presence-unsubscribe
   "Unsubscribe from the presence channel."
   [pn-channel]
-  (swap! presences disj pn-channel)
-  nil)
+  (let [c (@presences pn-channel)]
+    (leave pn-channel)
+    (async/close! c)
+    (swap! @presences dissoc pn-channel)
+    nil))
 
 (defn here-now
   "Returns all clients currently subscribed to the channel."

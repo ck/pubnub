@@ -1,4 +1,4 @@
-(defproject pubnub "0.2.0"
+(defproject pubnub "0.3.0"
   :description "Clojure PubNub Client"
   :url "http://github.com/ck/pubnub"
   :license {:name "Eclipse Public License"
@@ -6,15 +6,18 @@
 
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/core.async "0.1.301.0-deb34a-alpha"]
+                 [prismatic/schema "0.2.2"]
                  [cheshire "5.3.1"]
-                 [clj-http-lite "0.2.0"]
+                 [slingshot "0.10.3"]
+                 [clj-http "0.9.1"]
                  [digest "1.4.4"]
                  [org.bouncycastle/bcprov-jdk16 "1.46"]]
 
   :signing             {:gpg-key "DEDC8F15"}
   :deploy-repositories [["clojars" {:creds :gpg}]]
 
-  :profiles {:dev          {:source       [["dev"]]}
+  :profiles {:dev          {:source       [["dev"]]
+                            :dependencies [[org.clojure/test.check "0.5.7"]]}
              :1.5          {:dependencies [[org.clojure/clojure "1.5.1"]]}
              :1.6          {:dependencies [[org.clojure/clojure "1.6.0"]]}
              :sanity-check {:aot                :all

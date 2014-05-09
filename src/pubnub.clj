@@ -1,4 +1,4 @@
-; Copyright 2013 Christian Kebekus
+; Copyright 2013-2014 Christian Kebekus
 ;
 ; The use and distribution terms for this software are covered by the
 ; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0)
@@ -11,15 +11,81 @@
 (ns pubnub
   "API for Pubnub."
   (:refer-clojure :exclude [time])
-  (:require [pubnub.crypto :as crypto]
+  (:require [schema.core :as s]
+            [schema.macros :as sm]
+            [pubnub.crypto :as crypto]
             [pubnub.pubsub :as pubsub]
             [pubnub.presence :as presence]
-            [pubnub.util :as util]))
+            [pubnub.util :as util])
+  (:import [org.bouncycastle.crypto.paddings PaddedBufferedBlockCipher]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Schemas and Schema Helpers
+
+;;; Helpers
+
+(defn- valid-uuid? [uuid]
+  (re-matches #"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+              uuid))
+
+(defn- valid-subscribe-key? [key]
+  (re-matches #"^sub-c-[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}$"
+              key))
+
+(defn- valid-publish-key? [key]
+  (re-matches #"^pub-c-[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}$"
+              key))
+
+(defn- valid-secret-key? [key]
+  (re-matches #"^sec-c-[A-Za-z0-9]{48}$"
+              key))
+
+;;; Schemas
+
+(def UUID
+  (s/both s/Str
+          (s/pred valid-uuid? 'valid-uuid?)))
+
+(def PubNubSubscribeKey
+  (s/both s/Str
+          (s/pred valid-subscribe-key? 'valid-subscribe-key?)))
+
+(def PubNubPublishKey
+  (s/both s/Str
+          (s/pred valid-publish-key? 'valid-publish-key?)))
+
+(def PubNubSecretKey
+  (s/both s/Str
+          (s/pred valid-secret-key? 'valid-secret-key?)))
+
+(def PubNubEncoding
+  (s/enum :edn :json))
+
+(def PubNubChannelConf
+  {:channel                      s/Str
+   (s/optional-key :client-id)   s/Str
+   (s/optional-key :origin)      s/Str
+   :subscribe-key                PubNubSubscribeKey
+   (s/optional-key :publish-key) PubNubPublishKey
+   (s/optional-key :secret-key)  PubNubSecretKey
+   (s/optional-key :cipher-key)  (s/maybe s/Str)
+   (s/optional-key :ssl?)        s/Bool
+   (s/optional-key :encoding)    PubNubEncoding
+   (s/optional-key :buffer-size) s/Int})
+
+(def PubNubChannel
+  (merge PubNubChannelConf
+         {(s/optional-key :encrypt-cipher) PaddedBufferedBlockCipher
+          (s/optional-key :decrypt-cipher) PaddedBufferedBlockCipher}))
+
+(def PublishResult
+  (s/either {:status (s/eq :success), :message (s/eq "Sent")}
+            {:status (s/eq :error),   :message s/Str}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Constructors
 
-(defn channel
+(sm/defn ^:always-validate channel :- PubNubChannel
   "Create PubNub channel from the passed in configuration.
 
    {:channel       \"my-channel\"
@@ -30,7 +96,8 @@
     :secret-key    \"sec-c-1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789012\"
     :cipher-key    \"my super secret cipher key\"
     :ssl?          false
-    :encoding      :edn}
+    :encoding      :edn
+    :buffer-size   10}
 
    If ::origin, :ssl?, :client-id, or :encoding are not specified,
    they default to
@@ -44,68 +111,61 @@
 
    - use a custom origin, e.g. <company>.pubnub.com
    - only provide subscribe-key for public apps
-   - keep channel name secure via obscurity, e.g. apply SHA-256
+   - keep channel name secure, e.g. via obscurity by applying a SHA-256
 
   For more information see PubNub Best Practices (http://bit.ly/GX6JFG)."
-  [conf]
-  {:pre  [(map? conf)
-          (every? #(contains? conf %) [:channel :subscribe-key])]}
-  (merge {:origin    "pubsub.pubnub.com"
-          :ssl?      true
-          :client-id (util/uuid)
-          :encoding  :json}
+  [conf :- PubNubChannelConf]
+  (merge {:origin      "pubsub.pubnub.com"
+          :ssl?        true
+          :client-id   (util/uuid)
+          :encoding    :json
+          :buffer-size 10}
          conf
          (crypto/make-ciphers conf)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; PubSub
 
-(defn publish
-
+(sm/defn publish :- PublishResult
   "Publish a message to the PubNub channel.
 
-   Returns {:status :ok, :message \"Sent\"} if message was send successfully.
-   Otherwise it returns {:status :error, :message <error message>}
-  "
-  [pn-channel message]
+  Returns {:status :success, :message \"Sent\"} if message was send successfully.
+  Otherwise it returns {:status :error, :message <error message>}"
+  [pn-channel :- PubNubChannel message]
   (pubsub/publish pn-channel message))
 
-(defn subscribed?
-  "Returns true if (PubNub) channel is currently subscribed."
-  [pn-channel]
+(sm/defn subscribed? :- s/Bool
+  "Returns true if (PubNub) channel is currently subscribed,
+  otherwise false."
+  [pn-channel :- PubNubChannel]
   (pubsub/subscribed? pn-channel))
 
-(defn subscribe
-  "Subscribe to the PubNub channel."
-  [pn-channel
-   & {:keys [success-fn error-fn]
-      :or   {success-fn (constantly nil)
-             error-fn   (constantly nil)}}]
-  (pubsub/subscribe pn-channel success-fn error-fn))
+(sm/defn subscribe
+  "Subscribe to the PubNub channel.
+  Returns a (core.async) channel."
+  [pn-channel :- PubNubChannel]
+  (pubsub/subscribe pn-channel))
 
-(defn unsubscribe
+(sm/defn unsubscribe
   "Unsubscribe from the PubNub channel.
-   Closes (core.sync) channel at the end."
-  [pn-channel]
+  Closes (core.sync) channel at the end."
+  [pn-channel :- PubNubChannel]
   (pubsub/unsubscribe pn-channel))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Presence
 
-(defn presence
+(sm/defn presence-subscribe
   "Subscribe to presence events for the PubNub channel."
-  [pn-channel
-   & {:keys [success-fn error-fn]
-      :or   {success-fn (constantly nil)
-             error-fn   (constantly nil)}}]
-  (presence/presence pn-channel success-fn error-fn))
+  [pn-channel :- PubNubChannel]
+  (presence/presence-subscribe pn-channel))
 
-(defn presence-unsubscribe
+(sm/defn presence-unsubscribe
   "Unsubscribe to presence events for the PubNub channel."
-  [pn-channel]
+  [pn-channel :- PubNubChannel]
   (presence/presence-unsubscribe pn-channel))
 
-(defn here-now
+(sm/defn here-now
   "Returns the current occupancy status of the channel.
 
    Note that there is a delay between the time a client
@@ -128,13 +188,13 @@
            \"occupancy 2}
 
   "
-  [pn-channel]
+  [pn-channel :- PubNubChannel]
   (presence/here-now pn-channel))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Utilities
 
-(defn time
+(sm/defn time
   "Returns the PubNub (Long) time value or an exception message.
 
    Examples:
@@ -143,7 +203,7 @@
      ;;=> 13833327151957688
 
    This has not functional value other than a PING to the PubNub Cloud."
-  [pn-channel]
+  [pn-channel :- PubNubChannel]
   (util/time pn-channel))
 
 (defn uuid

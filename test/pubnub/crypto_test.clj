@@ -1,4 +1,4 @@
-; Copyright 2013 Christian Kebekus
+; Copyright 2013-2014 Christian Kebekus
 ;
 ; The use and distribution terms for this software are covered by the
 ; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0)
@@ -10,6 +10,11 @@
 ; You must not remove this notice, or any other, from this software.
 (ns pubnub.crypto-test
   (:require [clojure.test :refer :all]
+            [clojure.test.check :as tc]
+            [clojure.test.check.generators :as gen]
+            [clojure.test.check.properties :as prop]
+            [clojure.test.check.clojure-test :as ct :refer (defspec)]
+            [schema.test :as st]
             [pubnub.crypto :refer :all]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -17,8 +22,10 @@
 
 (def cipher (make-ciphers {:cipher-key "secret test cipher key"}))
 
+(use-fixtures :once st/validate-schemas)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Tests
+;;; Example-based Tests
 
 (deftest test-encrypt-and-decrypt
 
@@ -29,18 +36,6 @@
   (is (= "hello"
          (decrypt cipher "soBqymNEHUotV2YDpSmTtQ=="))
       "decrypt single word")
-
-  (is (= " hello there "
-         (->> " hello there "
-              (encrypt cipher)
-              (decrypt cipher)))
-      "preserve leading and trailing spaces")
-
-  (is (= "\"Hello World!\""
-         (->> "\"Hello World!\""
-              (encrypt cipher)
-              (decrypt cipher)))
-      "handle embedded strings")
 
   (is (= "[ {:foo 1, :bar \"baz\"} 3.1415]"
          (->> "[ {:foo 1, :bar \"baz\"} 3.1415]"
@@ -60,5 +55,12 @@
     (is (not= (encrypt c1 "hello")
               (encrypt c2 "hello"))
         "same message for same cipher-keys with different inititialization-vectors result in different outcomes"))
-
   )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Property-based Tests
+
+(defspec encrypt-decrypt-roundtrip
+  1000 ;; iterations
+  (prop/for-all [s gen/string-ascii]
+                (= s (decrypt cipher (encrypt cipher s)))))

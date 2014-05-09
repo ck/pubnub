@@ -8,7 +8,7 @@ Pubnub is available in Clojars. Add this `:dependency` to your Leiningen
 `project.clj`
 
 ```clojure
-[pubnub "0.2.0"]
+[pubnub "0.3.0"]
 ```
 
 Or, add this to your Maven project's `pom.xml`
@@ -22,7 +22,7 @@ Or, add this to your Maven project's `pom.xml`
 <dependency>
   <groupId>pubnub</groupId>
   <artifactId>pubnub</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 ```
 
@@ -38,8 +38,8 @@ This will provide us with a PubNub Sandbox we can play in:
 | Name          | Key                                                    |
 |---------------|--------------------------------------------------------|
 | Subscribe Key	| sub-c-12345678-1111-2222-3333-123456789012             |
-| Publish Key	| pub-c-87654321-1111-2222-3333-210987654321             |
-| Secret Key	| sec-c-1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789012 |
+| Publish Key   | pub-c-87654321-1111-2222-3333-210987654321             |
+| Secret Key    | sec-c-1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789012 |
 
 
 With the keys we can define a configuration
@@ -68,16 +68,25 @@ With the channel at hand, we can now publish messages to that channel:
 ```
 
 To receive any message published to the channel, we need
-to subscribe to it. The subscription takes a handler function
-that deals with incoming messages and a handler function in case
-any error occur:
+to subscribe to it. The subscription returns a Clojure [core.async][core.async]
+channel that will contain any new message.
 
 ```clojure
 (subscribed? test-channel)
-(subscribe test-channel
-           :callback (fn [msgs] (doseq [msg msgs] (println "MSG:" msg)))
-		   :error    (fn [e] (println "ERROR:" e)))
+(def subscription (subscribe test-channel))
 (subscribed? test-channel)
+```
+
+Retrieve and process messages using any of the operations
+core.async provides. E.g.
+
+```clojure
+(async/thread
+  (loop []
+    (when-let [msg (async/<!! subscription)]
+      (println msg)
+      (recur)))
+  (println "Unsubscribed"))
 ```
 
 When we do not want to receive any additonal messages,
@@ -118,7 +127,6 @@ created, even with eveything else being the same.
 
 ## ToDo ##
 
-* Replace callbacks with core.async channels
 * Hookup presence
 * Support EDN as data format
 * Handle PubNub errors for publish
@@ -134,7 +142,7 @@ created, even with eveything else being the same.
 
 ## License ##
 
-    Copyright © 2013 Christian Kebekus
+    Copyright © 2013-2014 Christian Kebekus
 
     The use and distribution terms for this software are covered by the
     Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0)
@@ -147,6 +155,7 @@ created, even with eveything else being the same.
     You must not remove this notice, or any other, from this software.
 
 
+[core.async]: http://github.com/clojure/core.async
 [pubnub]: http://www.pubnub.com
 [pubnub-account]: http://www.pubnub.com/account
 [pubnub-best-practices]: http://bit.ly/GX6JFG
