@@ -5,7 +5,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
   :dependencies [[org.clojure/clojure "1.6.0"]
-                 [org.clojure/core.async "0.1.301.0-deb34a-alpha"]
+                 [org.clojure/core.async "0.1.303.0-886421-alpha"]
                  [prismatic/schema "0.2.2"]
                  [cheshire "5.3.1"]
                  [slingshot "0.10.3"]
