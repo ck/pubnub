@@ -94,42 +94,29 @@
     (mapv #(json/parse-string (crypto/decrypt pn-channel %) true) data)
     data))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; API
-
-(defn subscribed?
-  "Returns true if (PubNub) channel is currently subscribed."
-  [pn-channel]
-  (contains? @subscriptions pn-channel))
-
-(defn publish
-  [{:keys [encrypt-cipher] :as pn-channel} message]
-  (try+
-    (let [enc-msg (if encrypt-cipher (crypto/encrypt pn-channel (json/generate-string message)) message)
-          msg     (json/generate-string enc-msg)]
-      (common/pubnub-get (publish-request pn-channel msg))
-      {:status :success, :message "Sent"})
-    (catch UnknownHostException uhe
-      (common/error-message uhe))
-    (catch IOException ioe
-      (common/error-message ioe))
-    (catch (and (map? %) (contains? % :status)) m
-      (common/error-message m))
-    (catch Exception e
-      (common/error-message e))))
-
 (defn- listen
-  "Listen on the PubNub channel."
+  "Listen for data since the timetoken on the PubNub channel."
+  [pn-channel timetoken]
+  (try+
+   {:value (common/pubnub-get (subscribe-request pn-channel timetoken))}
+   (catch UnknownHostException uhe
+     {:exception uhe :retry false})
+   (catch IOException ioe
+     {:exception ioe :retry true})
+   (catch (and (map? %) (contains? % :status)) m
+     {:exception m   :retry false})
+   (catch Exception e
+     {:exception e   :retry false})))
+
+(declare subscribed?)
+
+(defn- subscribe*
   [pn-channel]
   (let [c (async/chan (async/sliding-buffer (pn-channel :buffer-size)))]
     (swap! subscriptions assoc pn-channel c)
     (async/go
       (loop [timetoken 0]
-        (let [result               (try+ {:value (common/pubnub-get (subscribe-request pn-channel timetoken))}
-                                         (catch UnknownHostException uhe               {:exception uhe :retry false})
-                                         (catch IOException ioe                        {:exception ioe :retry true})
-                                         (catch (and (map? %) (contains? % :status)) m {:exception m   :retry false})
-                                         (catch Exception e                            {:exception e   :retry false}))]
+        (let [result (listen pn-channel timetoken)]
           (when (subscribed? pn-channel)
             (if-let [e (:exception result)]
               (if (:retry result)
@@ -148,13 +135,39 @@
                 (recur new-timetoken)))))))
     c))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; API
+
+(defn subscribed?
+  "Returns true if (PubNub) channel is currently subscribed."
+  [pn-channel]
+  (contains? @subscriptions pn-channel))
+
+(defn publish
+  [{:keys [encrypt-cipher] :as pn-channel} message]
+  (try+
+   (let [enc-msg (if encrypt-cipher
+                   (crypto/encrypt pn-channel (json/generate-string message))
+                   message)
+         msg     (json/generate-string enc-msg)]
+     (common/pubnub-get (publish-request pn-channel msg))
+     {:status :success, :message "Sent"})
+   (catch UnknownHostException uhe
+     (common/error-message uhe))
+   (catch IOException ioe
+     (common/error-message ioe))
+   (catch (and (map? %) (contains? % :status)) m
+     (common/error-message m))
+   (catch Exception e
+     (common/error-message e))))
+
 (defn subscribe
   "Subscribe to the PubNub channel.
   Returns the core.async channel."
   [pn-channel]
   (if (subscribed? pn-channel)
     (@subscriptions pn-channel)
-    (listen pn-channel)))
+    (subscribe* pn-channel)))
 
 (defn unsubscribe
   "Unsubscribe from the channel."

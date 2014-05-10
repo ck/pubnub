@@ -70,26 +70,30 @@
         {:keys [body]} res]
     (json/parse-string body true)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; API
-
-(defn presence?
-  "Returns true if (PubNub) channel is currently subscribed."
-  [pn-channel]
-  (contains? @presences pn-channel))
-
 (defn- listen
+  "Listen for presence events since the timetoken on the PubNub channel."
+  [pn-channel timetoken]
+  (try+
+   {:value (common/pubnub-get (presence-request pn-channel timetoken))}
+   (catch UnknownHostException uhe
+     {:exception uhe :retry false})
+   (catch IOException ioe
+     {:exception ioe :retry true})
+   (catch (and (map? %) (contains? % :status)) m
+     {:exception m   :retry false})
+   (catch Exception e
+     {:exception e   :retry false})))
+
+(declare presence?)
+
+(defn- presence-subscribe*
   "Listen on the PubNub channel."
   [pn-channel]
   (let [c (async/chan (async/sliding-buffer (pn-channel :buffer-size)))]
     (swap! presences assoc pn-channel c)
     (async/go
       (loop [timetoken 0]
-        (let [result               (try+ {:value (common/pubnub-get (presence-request pn-channel timetoken))}
-                                         (catch UnknownHostException uhe               {:exception uhe :retry false})
-                                         (catch IOException ioe                        {:exception ioe :retry true})
-                                         (catch (and (map? %) (contains? % :status)) m {:exception m   :retry false})
-                                         (catch Exception e                            {:exception e   :retry false}))]
+        (let [result (listen pn-channel timetoken)]
           (when (presence? pn-channel)
             (if-let [e (:exception result)]
               (if (:retry result)
@@ -112,13 +116,21 @@
                 (recur new-timetoken)))))))
     c))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; API
+
+(defn presence?
+  "Returns true if (PubNub) channel is currently subscribed."
+  [pn-channel]
+  (contains? @presences pn-channel))
+
 (defn presence-subscribe
   "Subscribe to the PubNub channel.
   Returns the core.async channel."
   [pn-channel]
   (if (presence? pn-channel)
     (@presences pn-channel)
-    (listen pn-channel)))
+    (presence-subscribe* pn-channel)))
 
 (defn presence-unsubscribe
   "Unsubscribe from the presence channel."
