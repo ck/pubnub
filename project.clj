@@ -20,10 +20,10 @@
                             :dependencies [[org.clojure/test.check "0.5.7"]]}
              :1.5          {:dependencies [[org.clojure/clojure "1.5.1"]]}
              :1.6          {:dependencies [[org.clojure/clojure "1.6.0"]]}
-             :sanity-check {:aot                :all
-                            :warn-on-reflection true
-                            :compile-path       "target/sanity-check-aot"}}
+             :sanity-check {:aot          :all
+                            :global-vars  {*warn-on-reflection* true}
+                            :compile-path "target/sanity-check-aot"}}
   :aliases  {"sanity-check" ["do" "clean," "with-profile" "sanity-check" "compile"]}
 
-  :warn-on-reflection false
-  :min-lein-version "2.0.0")
+  :global-vars  {*warn-on-reflection* false}
+  :min-lein-version "2.2.0")
