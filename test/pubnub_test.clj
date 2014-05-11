@@ -78,25 +78,36 @@
          (subscribed? channel))
         "is unsubscribed by default")))
 
-;; (deftest test-subscribe
+(deftest test-subscribe
 
-;;   (let [channel    (channel test-channel-conf)
-;;         _          (subscribe channel)
-;;         _          (Thread/sleep 2000)
-;;         subscribed (subscribed? channel)
-;;         _          (unsubscribe channel)]
-;;     (is (true? subscribed))))
+  (let [channel    (channel test-channel-conf)
+        _          (subscribe channel)
+        subscribed (subscribed? channel)
+        _          (unsubscribe channel)]
+    (is (true? subscribed))))
 
-;; (deftest test-unsubscribe
+(deftest test-unsubscribe
 
-;;   (let [channel    (channel test-channel-conf)
-;;         _          (subscribe channel)
-;;         _          (unsubscribe channel)
-;;         subscribed (subscribed? channel)]
-;;     (is (false? subscribed))) )
+  (let [channel    (channel test-channel-conf)
+        _          (subscribe channel)
+        _          (unsubscribe channel)
+        subscribed (subscribed? channel)]
+    (is (false? subscribed))) )
+
+(deftest test-presence-subscribe
+  (let [channel    (channel test-channel-conf)
+        _          (presence-subscribe channel)
+        subscribed (presence? channel)
+        _          (presence-unsubscribe channel)]
+    (is (true? subscribed))))
 
 (deftest test-presence-unsubscribe
-  )
+
+  (let [channel    (channel test-channel-conf)
+        _          (presence-subscribe channel)
+        _          (presence-unsubscribe channel)
+        subscribed (presence? channel)]
+    (is (false? subscribed))))
 
 (deftest test-here-now
   )

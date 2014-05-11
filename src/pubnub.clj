@@ -155,6 +155,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Presence
 
+(sm/defn presence? :- s/Bool
+  "Returns true if (PubNub) channel is currently
+  subscribed for presence events, otherwise false."
+  [pn-channel :- PubNubChannel]
+  (presence/presence? pn-channel))
+
 (sm/defn presence-subscribe
   "Subscribe to presence events for the PubNub channel."
   [pn-channel :- PubNubChannel]

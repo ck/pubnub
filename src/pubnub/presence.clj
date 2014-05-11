@@ -24,7 +24,8 @@
 ;;; Identites
 
 (def ^{:const true :private true} presence-channel-suffix "-pnpres")
-(def ^{:private true} presences (atom {}))
+
+(def ^{:private true} subscriptions (atom {}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Helpers
@@ -90,7 +91,7 @@
   "Listen on the PubNub channel."
   [pn-channel]
   (let [c (async/chan (async/sliding-buffer (pn-channel :buffer-size)))]
-    (swap! presences assoc pn-channel c)
+    (swap! subscriptions assoc pn-channel c)
     (async/go
       (loop [timetoken 0]
         (let [result (listen pn-channel timetoken)]
@@ -103,7 +104,7 @@
                 (do
                   (async/>! c (common/error-message e))
                   (async/close! c)
-                  (swap! presences dissoc pn-channel)))
+                  (swap! subscriptions dissoc pn-channel)))
               (let [body                   (get-in result [:value :body])
                     [events new-timetoken] (json/parse-string body true)]
                 ;; TODO: Events results are
@@ -122,23 +123,23 @@
 (defn presence?
   "Returns true if (PubNub) channel is currently subscribed."
   [pn-channel]
-  (contains? @presences pn-channel))
+  (contains? @subscriptions pn-channel))
 
 (defn presence-subscribe
   "Subscribe to the PubNub channel.
   Returns the core.async channel."
   [pn-channel]
   (if (presence? pn-channel)
-    (@presences pn-channel)
+    (@subscriptions pn-channel)
     (presence-subscribe* pn-channel)))
 
 (defn presence-unsubscribe
   "Unsubscribe from the presence channel."
   [pn-channel]
-  (let [c (@presences pn-channel)]
+  (when-let [c (@subscriptions pn-channel)]
     (leave pn-channel)
     (async/close! c)
-    (swap! @presences dissoc pn-channel)
+    (swap! subscriptions dissoc pn-channel)
     nil))
 
 (defn here-now

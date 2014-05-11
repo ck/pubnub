@@ -172,7 +172,7 @@
 (defn unsubscribe
   "Unsubscribe from the channel."
   [pn-channel]
-  (let [c (@subscriptions pn-channel)]
+  (when-let [c (@subscriptions pn-channel)]
     (leave pn-channel)
     (async/close! c)
     (swap! subscriptions dissoc pn-channel)
