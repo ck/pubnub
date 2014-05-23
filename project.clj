@@ -17,7 +17,7 @@
   :deploy-repositories [["clojars" {:creds :gpg}]]
 
   :profiles {:dev          {:source       [["dev"]]
-                            :dependencies [[org.clojure/test.check "0.5.7"]]}
+                            :dependencies [[org.clojure/test.check "0.5.8"]]}
              :1.5          {:dependencies [[org.clojure/clojure "1.5.1"]]}
              :1.6          {:dependencies [[org.clojure/clojure "1.6.0"]]}
              :sanity-check {:aot          :all
