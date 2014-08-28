@@ -58,7 +58,4 @@
 ;;; Request
 
 (defn pubnub-get [req]
-  (http/get req {:headers        headers
-                 ;; :socket-timeout 1000
-                 ;; :conn-timeout   1000
-                 :retry-handler  (constantly false)}))
+  (http/get req {:headers headers }))
