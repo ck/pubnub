@@ -1,4 +1,4 @@
-(defproject pubnub "0.4.1"
+(defproject pubnub "0.4.2"
   :description "Clojure PubNub Client"
   :url "http://github.com/ck/pubnub"
   :license {:name "Eclipse Public License"
