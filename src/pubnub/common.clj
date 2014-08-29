@@ -58,4 +58,5 @@
 ;;; Request
 
 (defn pubnub-get [req]
-  (http/get req {:headers headers }))
+  (http/get req {:headers       headers
+                 :retry-handler (constantly false)}))
